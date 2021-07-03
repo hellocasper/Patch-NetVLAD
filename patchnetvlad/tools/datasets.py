@@ -108,6 +108,9 @@ class PlaceDataset(data.Dataset):
         with open(textfile, 'r') as f:
             image_list = f.read().splitlines()
 
+        if 'pittsburgh250k' in image_list[0].lower():
+            image_list = ['Pittsburgh/'+'/'.join(q_im.split('/')[-2:]) for q_im in image_list]
+
         if 'robotcar' in image_list[0].lower():
             image_list = [os.path.splitext('/'.join(q_im.split('/')[-3:]))[0] for q_im in image_list]
 

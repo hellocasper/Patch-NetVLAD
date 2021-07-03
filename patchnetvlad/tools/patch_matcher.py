@@ -123,7 +123,7 @@ class PatchMatcher(object):
                 # anchor to the maximum x and y axis index for the patch "feature space"
                 xmax = np.max(indices[0, :])
                 ymax = np.max(indices[1, :])
-
+ 
                 # find second-order residual, by comparing the first residual to the respective anchors
                 # after this step, larger is now better
                 # add non-linearity to the system to excessively penalise deviations from the mean
