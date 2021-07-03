@@ -45,6 +45,7 @@ from patchnetvlad.tools.datasets import input_transform
 from patchnetvlad.models.local_matcher import calc_keypoint_centers_from_patches as calc_keypoint_centers_from_patches
 from patchnetvlad.tools import PATCHNETVLAD_ROOT_DIR
 
+from os import environ
 
 def apply_patch_weights(input_scores, num_patches, patch_weights):
     output_score = 0
@@ -159,9 +160,12 @@ def main():
     parser.add_argument('--plot_save_path', type=str, default=join(PATCHNETVLAD_ROOT_DIR, 'results'),
                         help='Path plus optional prefix pointing to a location to save the output matching plot')
     parser.add_argument('--nocuda', action='store_true', help='If true, use CPU only. Else use GPU.')
+    parser.add_argument('--gpu_idx', type=int, default=0, help='assign gpu_idx')
 
     opt = parser.parse_args()
     print(opt)
+    environ["CUDA_DEVICE_ORDER"]="PCI_BUS_ID"
+    environ["CUDA_VISIBLE_DEVICES"]=str(opt.gpu_idx)
 
     configfile = opt.config_path
     assert os.path.isfile(configfile)

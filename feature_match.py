@@ -53,6 +53,8 @@ from patchnetvlad.tools.datasets import PlaceDataset
 from patchnetvlad.models.local_matcher import local_matcher
 from patchnetvlad.tools import PATCHNETVLAD_ROOT_DIR
 
+from os import environ
+
 
 def compute_recall(gt, predictions, numQ, n_values, recall_str=''):
     correct_at_n = np.zeros(len(n_values))
@@ -180,9 +182,12 @@ def main():
                         help='Path (with extension) to a file that stores the ground-truth data')
     parser.add_argument('--result_save_folder', type=str, default='results')
     parser.add_argument('--nocuda', action='store_true', help='If true, use CPU only. Else use GPU.')
+    parser.add_argument('--gpu_idx', type=int, default=0, help='assign gpu_idx')
 
     opt = parser.parse_args()
     print(opt)
+    environ["CUDA_DEVICE_ORDER"]="PCI_BUS_ID"
+    environ["CUDA_VISIBLE_DEVICES"]=str(opt.gpu_idx)
 
     configfile = opt.config_path
     assert os.path.isfile(configfile)

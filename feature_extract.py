@@ -49,6 +49,8 @@ from patchnetvlad.tools.datasets import PlaceDataset
 from patchnetvlad.models.models_generic import get_backend, get_model, get_pca_encoding
 from patchnetvlad.tools import PATCHNETVLAD_ROOT_DIR
 
+from os import environ
+
 
 def feature_extract(eval_set, model, device, opt, config):
     if not exists(opt.output_features_dir):
@@ -112,9 +114,12 @@ def main():
     parser.add_argument('--output_features_dir', type=str, default=join(PATCHNETVLAD_ROOT_DIR, 'output_features'),
                         help='Path to store all patch-netvlad features')
     parser.add_argument('--nocuda', action='store_true', help='If true, use CPU only. Else use GPU.')
+    parser.add_argument('--gpu_idx', type=int, default=0, help='assign gpu_idx')
 
     opt = parser.parse_args()
     print(opt)
+    environ["CUDA_DEVICE_ORDER"]="PCI_BUS_ID"
+    environ["CUDA_VISIBLE_DEVICES"]=str(opt.gpu_idx)
 
     configfile = opt.config_path
     assert os.path.isfile(configfile)

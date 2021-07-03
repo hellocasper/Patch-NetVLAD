@@ -19,4 +19,5 @@ python feature_match.py \
 python match_two.py \
 --config_path patchnetvlad/configs/performance.ini \
 --first_im_path=patchnetvlad/example_images/tokyo_query.jpg \
---second_im_path=patchnetvlad/example_images/tokyo_db.png
+--second_im_path=patchnetvlad/example_images/tokyo_db.png \
+--gpu_idx=1
