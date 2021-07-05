@@ -56,9 +56,10 @@ def get_square_regions_from_integral(feat_integral, patch_size, patch_stride):
     """
     Input as [N,D,H+1,W+1] where additional 1s for last two axes are zero paddings
     regSize and regStride are single values as only square regions are implemented currently
+    patch_size,patch_stride: [global_params][patch_sizes, strides]: (2,1) (5,1) (8,1)
     """
     N, D, H, W = feat_integral.shape
-
+    print(N, D, H, W,'!!!!!!!!')
     if feat_integral.get_device() == -1:
         conv_weight = torch.ones(D, 1, 2, 2)
     else:

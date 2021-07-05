@@ -81,7 +81,7 @@ def get_model(encoder, encoder_dim, opt, config, append_pca_layer=False):
         raise ValueError('Unknown pooling type: ' + opt.pooling)
 
     if append_pca_layer:
-        num_pcs = int(config['num_pcs'])
+        num_pcs = int(config['num_pcs']) #4096
         netvlad_output_dim = encoder_dim
         if config['pooling'].lower() == 'netvlad' or config['pooling'].lower() == 'patchnetvlad':
             netvlad_output_dim *= int(config['num_clusters'])

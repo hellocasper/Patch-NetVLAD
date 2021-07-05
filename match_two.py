@@ -101,23 +101,25 @@ def match_two(model, device, config, im_one, im_two, plot_save_path):
 
     tqdm.write('====> Extracting Features')
     with torch.no_grad():
-        image_encoding = model.encoder(input_data)
+        image_encoding = model.encoder(input_data) # [2,512,30,40]
 
-        vlad_local, _ = model.pool(image_encoding)
+        vlad_local, _ = model.pool(image_encoding) # _(global descriptor): [2,32768]
         # global_feats = get_pca_encoding(model, vlad_global).cpu().numpy()
 
         local_feats_one = []
         local_feats_two = []
         for this_iter, this_local in enumerate(vlad_local):
+            # this_local is of shape: [2,32768,1131] [2,32768,936] [2,32768,759] 
             this_local_feats = get_pca_encoding(model, this_local.permute(2, 0, 1).reshape(-1, this_local.size(1))). \
                 reshape(this_local.size(2), this_local.size(0), pool_size).permute(1, 2, 0)
+            # this_local_feats is of shape: [2,4096,1131] [2,4096,936] [2,4096,759] 
             local_feats_one.append(torch.transpose(this_local_feats[0, :, :], 0, 1))
             local_feats_two.append(this_local_feats[1, :, :])
 
     tqdm.write('====> Calculating Keypoint Positions')
-    patch_sizes = [int(s) for s in config['global_params']['patch_sizes'].split(",")]
-    strides = [int(s) for s in config['global_params']['strides'].split(",")]
-    patch_weights = np.array(config['feature_match']['patchWeights2Use'].split(",")).astype(float)
+    patch_sizes = [int(s) for s in config['global_params']['patch_sizes'].split(",")] #[2,5,8]
+    strides = [int(s) for s in config['global_params']['strides'].split(",")] #[1,1,1]
+    patch_weights = np.array(config['feature_match']['patchWeights2Use'].split(",")).astype(float) #[0.45,0.15,0.4]
 
     all_keypoints = []
     all_indices = []
