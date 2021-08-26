@@ -66,10 +66,33 @@ def calc_receptive_boxes(height, width):
 
     x, y = torch.meshgrid(torch.arange(0, height), torch.arange(0, width))
     coordinates = torch.reshape(torch.stack([y, x], dim=2), [-1, 2])
-    # [y,x,y,x]
-    point_boxes = torch.cat([coordinates, coordinates], 1)
+    # coordinates:
+    # tensor([[ 0,  0],
+    # [ 1,  0],
+    # [ 2,  0],
+    # ...,
+    # [37, 29],
+    # [38, 29],
+    # [39, 29]])
+    point_boxes = torch.cat([coordinates, coordinates], 1)  # [y,x,y,x]
+    # point_boxes: tensor(
+    # [[ 0,  0,  0,  0],
+    # [ 1,  0,  1,  0],
+    # [ 2,  0,  2,  0],
+    # ...,
+    # [37, 29, 37, 29],
+    # [38, 29, 38, 29],
+    # [39, 29, 39, 29]])
     bias = [-padding, -padding, -padding + rf - 1, -padding + rf - 1]
     rf_boxes = stride * point_boxes + torch.FloatTensor(bias)
+    # ref_boxes:
+    # tensor([[-90., -90., 105., 105.],
+    #     [-74., -90., 121., 105.],
+    #     [-58., -90., 137., 105.],
+    #     ...,
+    #     [502., 374., 697., 569.],
+    #     [518., 374., 713., 569.],
+    #     [534., 374., 729., 569.]])
     return rf_boxes
 
 
@@ -78,8 +101,8 @@ def calc_keypoint_centers_from_patches(config, patch_size_h, patch_size_w, strid
 
     Args:
         config: feature_match config data
-        patch_size_h: height of patches
-        patch_size_w: width of patches
+        patch_size_h: height of patches # 2,5,8
+        patch_size_w: width of patches # 1,1,1
         stride_h: stride in vertical direction between patches
         stride_w: stride in horizontal direction between patches
 
@@ -88,29 +111,35 @@ def calc_keypoint_centers_from_patches(config, patch_size_h, patch_size_w, strid
         indices: 2-D patch positions for rapid spatial scoring
     '''
 
-    H = int(int(config['imageresizeH']) / 16)  # 16 is the vgg scaling from image space to feature space (conv5)
-    W = int(int(config['imageresizeW']) / 16)
+    # 16 is the vgg scaling from image space to feature space (conv5)
+    H = int(int(config['imageresizeH']) / 16)  # 640/16=40
+    W = int(int(config['imageresizeW']) / 16)  # 480/16=30
     padding_size = [0, 0]
     patch_size = (int(patch_size_h), int(patch_size_w))
     stride = (int(stride_h), int(stride_w))
 
+    # 29, 26, 23
     Hout = int((H + (2 * padding_size[0]) - patch_size[0]) / stride[0] + 1)
+    # 39, 36, 33
     Wout = int((W + (2 * padding_size[1]) - patch_size[1]) / stride[1] + 1)
 
-    boxes = calc_receptive_boxes(H, W)
+    boxes = calc_receptive_boxes(H, W)  # [40,30]
 
     num_regions = Hout * Wout
 
     k = 0
     indices = np.zeros((2, num_regions), dtype=int)
     keypoints = np.zeros((2, num_regions), dtype=int)
-    # Assuming sensible values for stride here, may get errors with large stride values
+    # Assuming sensible values for stride here, may get errors with large stride values  # boxes: [width,height,width,height]
     for i in range(0, Hout, stride_h):
         for j in range(0, Wout, stride_w):
-            keypoints[0, k] = ((boxes[j + (i * W), 0] + boxes[(j + (patch_size[1] - 1)) + (i * W), 2]) / 2)
-            keypoints[1, k] = ((boxes[j + ((i + 1) * W), 1] + boxes[j + ((i + (patch_size[0] - 1)) * W), 3]) / 2)
+            keypoints[0, k] = (
+                (boxes[j + (i * W), 0] + boxes[(j + (patch_size[1] - 1)) + (i * W), 2]) / 2)
+            keypoints[1, k] = ((boxes[j + ((i + 1) * W), 1] +
+                               boxes[j + ((i + (patch_size[0] - 1)) * W), 3]) / 2)
             indices[0, k] = j
             indices[1, k] = i
+            print(keypoints[:, k], indices[:, k])
             k += 1
 
     return keypoints, indices
@@ -119,7 +148,8 @@ def calc_keypoint_centers_from_patches(config, patch_size_h, patch_size_w, strid
 def normalise_func(input_diff, num_patches, patch_weights):
     normed_diff = 0
     if len(patch_weights) != num_patches:
-        raise ValueError('The number of patch weights must equal the number of patches used')
+        raise ValueError(
+            'The number of patch weights must equal the number of patches used')
     for i in range(num_patches):
         normed_diff = normed_diff + patch_weights[i] * (
             (input_diff[:, i] - np.mean(input_diff[:, i])) / np.std(input_diff[:, i]))
@@ -129,16 +159,20 @@ def normalise_func(input_diff, num_patches, patch_weights):
 def local_matcher(predictions, eval_set, input_query_local_features_prefix,
                   input_index_local_features_prefix, config, device):
 
-    patch_sizes = [int(s) for s in config['global_params']['patch_sizes'].split(",")]
-    strides = [int(s) for s in config['global_params']['strides'].split(",")]
-    patch_weights = np.array(config['feature_match']['patchWeights2Use'].split(",")).astype(float)
+    patch_sizes = [int(s) for s in config['global_params']
+                   ['patch_sizes'].split(",")]  # [2,5,8]
+    strides = [int(s) for s in config['global_params']
+               ['strides'].split(",")]  # [1,1,1]
+    patch_weights = np.array(
+        config['feature_match']['patchWeights2Use'].split(",")).astype(float)  # np.array([0.45,0.15,0.4])
 
     all_keypoints = []
     all_indices = []
 
     for patch_size, stride in zip(patch_sizes, strides):
         # we currently only provide support for square patches, but this can be easily modified for future works
-        keypoints, indices = calc_keypoint_centers_from_patches(config['feature_match'], patch_size, patch_size, stride, stride)
+        keypoints, indices = calc_keypoint_centers_from_patches(
+            config['feature_match'], patch_size, patch_size, stride, stride)
         all_keypoints.append(keypoints)
         all_indices.append(indices)
 
@@ -149,17 +183,22 @@ def local_matcher(predictions, eval_set, input_query_local_features_prefix,
 
     for q_idx, pred in enumerate(tqdm(predictions, leave=False, desc='Patch compare pred')):
         diffs = np.zeros((predictions.shape[1], len(patch_sizes)))
-        image_name_query = os.path.splitext(os.path.basename(eval_set.images[eval_set.numDb + q_idx]))[0]
+        image_name_query = os.path.splitext(os.path.basename(
+            eval_set.images[eval_set.numDb + q_idx]))[0]
         qfeat = []
         for patch_size in patch_sizes:
-            qfilename = input_query_local_features_prefix + '_' + 'psize{}_'.format(patch_size) + image_name_query + '.npy'
-            qfeat.append(torch.transpose(torch.tensor(np.load(qfilename), device=device), 0, 1))
+            qfilename = input_query_local_features_prefix + '_' + \
+                'psize{}_'.format(patch_size) + image_name_query + '.npy'
+            qfeat.append(torch.transpose(torch.tensor(
+                np.load(qfilename), device=device), 0, 1))
             # we pre-transpose here to save compute speed
         for k, candidate in enumerate(pred):
-            image_name_index = os.path.splitext(os.path.basename(eval_set.images[candidate]))[0]
+            image_name_index = os.path.splitext(
+                os.path.basename(eval_set.images[candidate]))[0]
             dbfeat = []
             for patch_size in patch_sizes:
-                dbfilename = input_index_local_features_prefix + '_' + 'psize{}_'.format(patch_size) + image_name_index + '.npy'
+                dbfilename = input_index_local_features_prefix + '_' + \
+                    'psize{}_'.format(patch_size) + image_name_index + '.npy'
                 dbfeat.append(torch.tensor(np.load(dbfilename), device=device))
 
             diffs[k, :], _, _ = matcher.match(qfeat, dbfeat)

@@ -47,10 +47,12 @@ from patchnetvlad.tools import PATCHNETVLAD_ROOT_DIR
 
 from os import environ
 
+
 def apply_patch_weights(input_scores, num_patches, patch_weights):
     output_score = 0
     if len(patch_weights) != num_patches:
-        raise ValueError('The number of patch weights must equal the number of patches used')
+        raise ValueError(
+            'The number of patch weights must equal the number of patches used')
     for i in range(num_patches):
         output_score = output_score + (patch_weights[i] * input_scores[i])
     return output_score
@@ -63,17 +65,21 @@ def plot_two(cv_im_one, cv_im_two, inlier_keypoints_one, inlier_keypoints_two, p
     matches_all = []
     for this_inlier_keypoints_one, this_inlier_keypoints_two in zip(inlier_keypoints_one, inlier_keypoints_two):
         for i in range(this_inlier_keypoints_one.shape[0]):
-            kp_all1.append(cv2.KeyPoint(this_inlier_keypoints_one[i, 0].astype(float), this_inlier_keypoints_one[i, 1].astype(float), 1, -1, 0, 0, -1))
-            kp_all2.append(cv2.KeyPoint(this_inlier_keypoints_two[i, 0].astype(float), this_inlier_keypoints_two[i, 1].astype(float), 1, -1, 0, 0, -1))
+            kp_all1.append(cv2.KeyPoint(this_inlier_keypoints_one[i, 0].astype(
+                float), this_inlier_keypoints_one[i, 1].astype(float), 1, -1, 0, 0, -1))
+            kp_all2.append(cv2.KeyPoint(this_inlier_keypoints_two[i, 0].astype(
+                float), this_inlier_keypoints_two[i, 1].astype(float), 1, -1, 0, 0, -1))
             matches_all.append(cv2.DMatch(i, i, 0))
 
     im_allpatch_matches = cv2.drawMatches(cv_im_one, kp_all1, cv_im_two, kp_all2,
                                           matches_all, None, matchColor=(0, 255, 0), flags=2)
     if plot_save_path is None:
-        im_allpatch_matches = cv2.cvtColor(im_allpatch_matches, cv2.COLOR_RGB2BGR)
+        im_allpatch_matches = cv2.cvtColor(
+            im_allpatch_matches, cv2.COLOR_RGB2BGR)
         cv2.imshow('frame', im_allpatch_matches)
     else:
-        im_allpatch_matches = cv2.cvtColor(im_allpatch_matches, cv2.COLOR_BGR2RGB)
+        im_allpatch_matches = cv2.cvtColor(
+            im_allpatch_matches, cv2.COLOR_BGR2RGB)
 
         plt.imshow(im_allpatch_matches)
         # plt.show()
@@ -89,7 +95,8 @@ def match_two(model, device, config, im_one, im_two, plot_save_path):
 
     model.eval()
 
-    it = input_transform((int(config['feature_extract']['imageresizeH']), int(config['feature_extract']['imageresizeW'])))
+    it = input_transform((int(config['feature_extract']['imageresizeH']), int(
+        config['feature_extract']['imageresizeW'])))
 
     im_one_pil = Image.fromarray(cv2.cvtColor(im_one, cv2.COLOR_BGR2RGB))
     im_two_pil = Image.fromarray(cv2.cvtColor(im_two, cv2.COLOR_BGR2RGB))
@@ -101,54 +108,67 @@ def match_two(model, device, config, im_one, im_two, plot_save_path):
 
     tqdm.write('====> Extracting Features')
     with torch.no_grad():
-        image_encoding = model.encoder(input_data) # [2,512,30,40]
+        image_encoding = model.encoder(input_data)  # [2,512,30,40]
 
-        vlad_local, _ = model.pool(image_encoding) # _(global descriptor): [2,32768]
+        # _(global descriptor): [2,32768]
+        vlad_local, _ = model.pool(image_encoding)
         # global_feats = get_pca_encoding(model, vlad_global).cpu().numpy()
 
         local_feats_one = []
         local_feats_two = []
         for this_iter, this_local in enumerate(vlad_local):
-            # this_local is of shape: [2,32768,1131] [2,32768,936] [2,32768,759] 
+            # this_local is of shape: [2,32768,1131] [2,32768,936] [2,32768,759]
             this_local_feats = get_pca_encoding(model, this_local.permute(2, 0, 1).reshape(-1, this_local.size(1))). \
-                reshape(this_local.size(2), this_local.size(0), pool_size).permute(1, 2, 0)
-            # this_local_feats is of shape: [2,4096,1131] [2,4096,936] [2,4096,759] 
-            local_feats_one.append(torch.transpose(this_local_feats[0, :, :], 0, 1))
+                reshape(this_local.size(2), this_local.size(
+                    0), pool_size).permute(1, 2, 0)
+            # this_local_feats is of shape: [2,4096,1131] [2,4096,936] [2,4096,759]
+            local_feats_one.append(torch.transpose(
+                this_local_feats[0, :, :], 0, 1))
             local_feats_two.append(this_local_feats[1, :, :])
 
     tqdm.write('====> Calculating Keypoint Positions')
-    patch_sizes = [int(s) for s in config['global_params']['patch_sizes'].split(",")] #[2,5,8]
-    strides = [int(s) for s in config['global_params']['strides'].split(",")] #[1,1,1]
-    patch_weights = np.array(config['feature_match']['patchWeights2Use'].split(",")).astype(float) #[0.45,0.15,0.4]
+    patch_sizes = [int(s) for s in config['global_params']
+                   ['patch_sizes'].split(",")]  # [2,5,8]
+    strides = [int(s) for s in config['global_params']
+               ['strides'].split(",")]  # [1,1,1]
+    patch_weights = np.array(config['feature_match']['patchWeights2Use'].split(
+        ",")).astype(float)  # [0.45,0.15,0.4]
 
     all_keypoints = []
     all_indices = []
 
     tqdm.write('====> Matching Local Features')
-    for patch_size, stride in zip(patch_sizes, strides):
+    for patch_size, stride in zip(patch_sizes, strides):  # (2,1) (5,1) (8,1)
         # we currently only provide support for square patches, but this can be easily modified for future works
-        keypoints, indices = calc_keypoint_centers_from_patches(config['feature_match'], patch_size, patch_size, stride, stride)
+        keypoints, indices = calc_keypoint_centers_from_patches(
+            config['feature_match'], patch_size, patch_size, stride, stride)
         all_keypoints.append(keypoints)
         all_indices.append(indices)
 
     matcher = PatchMatcher(config['feature_match']['matcher'], patch_sizes, strides, all_keypoints,
                            all_indices)
 
-    scores, inlier_keypoints_one, inlier_keypoints_two = matcher.match(local_feats_one, local_feats_two)
+    scores, inlier_keypoints_one, inlier_keypoints_two = matcher.match(
+        local_feats_one, local_feats_two)
     score = -apply_patch_weights(scores, len(patch_sizes), patch_weights)
 
-    print(f"Similarity score between the two images is: {score:.5f}. Larger scores indicate better matches.")
+    print(
+        f"Similarity score between the two images is: {score:.5f}. Larger scores indicate better matches.")
 
     if config['feature_match']['matcher'] == 'RANSAC':
         if plot_save_path is not None:
-            tqdm.write('====> Plotting Local Features and save them to ' + str(join(plot_save_path, 'patchMatchings.png')))
+            tqdm.write('====> Plotting Local Features and save them to ' +
+                       str(join(plot_save_path, 'patchMatchings.png')))
 
         # using cv2 for their in-built keypoint correspondence plotting tools
-        cv_im_one = cv2.resize(im_one, (int(config['feature_extract']['imageresizeW']), int(config['feature_extract']['imageresizeH'])))
-        cv_im_two = cv2.resize(im_two, (int(config['feature_extract']['imageresizeW']), int(config['feature_extract']['imageresizeH'])))
+        cv_im_one = cv2.resize(im_one, (int(config['feature_extract']['imageresizeW']), int(
+            config['feature_extract']['imageresizeH'])))
+        cv_im_two = cv2.resize(im_two, (int(config['feature_extract']['imageresizeW']), int(
+            config['feature_extract']['imageresizeH'])))
         # cv2 resize slightly different from torch, but for visualisation only not a big problem
 
-        plot_two(cv_im_one, cv_im_two, inlier_keypoints_one, inlier_keypoints_two, plot_save_path)
+        plot_two(cv_im_one, cv_im_two, inlier_keypoints_one,
+                 inlier_keypoints_two, plot_save_path)
 
 
 def main():
@@ -161,13 +181,15 @@ def main():
                         help='Full path (with extension) to another image file')
     parser.add_argument('--plot_save_path', type=str, default=join(PATCHNETVLAD_ROOT_DIR, 'results'),
                         help='Path plus optional prefix pointing to a location to save the output matching plot')
-    parser.add_argument('--nocuda', action='store_true', help='If true, use CPU only. Else use GPU.')
-    parser.add_argument('--gpu_idx', type=int, default=0, help='assign gpu_idx')
+    parser.add_argument('--nocuda', action='store_true',
+                        help='If true, use CPU only. Else use GPU.')
+    parser.add_argument('--gpu_idx', type=int,
+                        default=0, help='assign gpu_idx')
 
     opt = parser.parse_args()
     print(opt)
-    environ["CUDA_DEVICE_ORDER"]="PCI_BUS_ID"
-    environ["CUDA_VISIBLE_DEVICES"]=str(opt.gpu_idx)
+    environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
+    environ["CUDA_VISIBLE_DEVICES"] = str(opt.gpu_idx)
 
     configfile = opt.config_path
     assert os.path.isfile(configfile)
@@ -183,7 +205,8 @@ def main():
     encoder_dim, encoder = get_backend()
 
     # must resume to do extraction
-    resume_ckpt = config['global_params']['resumePath'] + config['global_params']['num_pcs'] + '.pth.tar'
+    resume_ckpt = config['global_params']['resumePath'] + \
+        config['global_params']['num_pcs'] + '.pth.tar'
 
     # backup: try whether resume_ckpt is relative to script path
     if not isfile(resume_ckpt):
@@ -194,11 +217,15 @@ def main():
 
     if isfile(resume_ckpt):
         print("=> loading checkpoint '{}'".format(resume_ckpt))
-        checkpoint = torch.load(resume_ckpt, map_location=lambda storage, loc: storage)
-        assert checkpoint['state_dict']['WPCA.0.bias'].shape[0] == int(config['global_params']['num_pcs'])
-        config['global_params']['num_clusters'] = str(checkpoint['state_dict']['pool.centroids'].shape[0])
+        checkpoint = torch.load(
+            resume_ckpt, map_location=lambda storage, loc: storage)
+        assert checkpoint['state_dict']['WPCA.0.bias'].shape[0] == int(
+            config['global_params']['num_pcs'])
+        config['global_params']['num_clusters'] = str(
+            checkpoint['state_dict']['pool.centroids'].shape[0])
 
-        model = get_model(encoder, encoder_dim, opt, config['global_params'], append_pca_layer=True)
+        model = get_model(encoder, encoder_dim, opt,
+                          config['global_params'], append_pca_layer=True)
 
         if int(config['global_params']['nGPU']) > 1 and torch.cuda.device_count() > 1:
             model.encoder = nn.DataParallel(model.encoder)
@@ -209,7 +236,8 @@ def main():
         model = model.to(device)
         print("=> loaded checkpoint '{}'".format(resume_ckpt, ))
     else:
-        raise FileNotFoundError("=> no checkpoint found at '{}'".format(resume_ckpt))
+        raise FileNotFoundError(
+            "=> no checkpoint found at '{}'".format(resume_ckpt))
 
     im_one = cv2.imread(opt.first_im_path, -1)
     if im_one is None:
@@ -220,9 +248,11 @@ def main():
 
     match_two(model, device, config, im_one, im_two, opt.plot_save_path)
 
-    torch.cuda.empty_cache()  # garbage clean GPU memory, a bug can occur when Pytorch doesn't automatically clear the
+    # garbage clean GPU memory, a bug can occur when Pytorch doesn't automatically clear the
+    torch.cuda.empty_cache()
     # memory after runs
     print('Done')
+
 
 if __name__ == "__main__":
     main()
