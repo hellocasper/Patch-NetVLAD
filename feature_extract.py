@@ -59,7 +59,7 @@ def feature_extract(eval_set, model, device, opt, config):
     output_local_features_prefix = join(opt.output_features_dir, 'patchfeats')
     output_global_features_filename = join(opt.output_features_dir, 'globalfeats.npy')
 
-    pool_size = int(config['global_params']['num_pcs'])
+    pool_size = int(config['global_params']['num_pcs']) #4096
 
     test_data_loader = DataLoader(dataset=eval_set, num_workers=int(config['global_params']['threads']),
                                   batch_size=int(config['feature_extract']['cacheBatchSize']),
@@ -72,29 +72,29 @@ def feature_extract(eval_set, model, device, opt, config):
 
         for iteration, (input_data, indices) in \
                 enumerate(tqdm(test_data_loader, position=1, leave=False, desc='Test Iter'.rjust(15)), 1):
-            indices_np = indices.detach().numpy()
+            indices_np = indices.detach().numpy() # indices of this cacheBatch images
             input_data = input_data.to(device)
             image_encoding = model.encoder(input_data)
             if config['global_params']['pooling'].lower() == 'patchnetvlad':
-                vlad_local, vlad_global = model.pool(image_encoding)
+                vlad_local, vlad_global = model.pool(image_encoding) #vlad_local is a list of 3 patch_vlad_features which is of shape [3,4096,num_scale0 1131/num_scale1 936/num_scale2 759] respectively
 
                 vlad_global_pca = get_pca_encoding(model, vlad_global)
                 db_feat[indices_np, :] = vlad_global_pca.detach().cpu().numpy()
 
                 for this_iter, this_local in enumerate(vlad_local):
-                    this_patch_size = model.pool.patch_sizes[this_iter]
-
+                    # this local is of shape [3, 32768,1131] [3, 32768, 936] [3, 32768, 759]
+                    this_patch_size = model.pool.patch_sizes[this_iter] 
                     db_feat_patches = np.empty((this_local.size(0), pool_size, this_local.size(2)),
                                               dtype=np.float32)
-                    grid = np.indices((1, this_local.size(0)))
+                    grid = np.indices((1, this_local.size(0))) # [[0 1 2]]
                     this_local_pca = get_pca_encoding(model, this_local.permute(2, 0, 1).reshape(-1, this_local.size(1))).\
-                        reshape(this_local.size(2), this_local.size(0), pool_size).permute(1, 2, 0)
+                        reshape(this_local.size(2), this_local.size(0), pool_size).permute(1, 2, 0) # [3,4096,1131] [3,4096, 936] [3,4096, 759]
                     db_feat_patches[grid, :, :] = this_local_pca.detach().cpu().numpy()
 
                     for i, val in enumerate(indices_np):
                         image_name = os.path.splitext(os.path.basename(eval_set.images[val]))[0]
                         filename = output_local_features_prefix + '_' + 'psize{}_'.format(this_patch_size) + image_name + '.npy'
-                        np.save(filename, db_feat_patches[i, :, :])
+                        np.save(filename, db_feat_patches[i, :, :]) # [4096,1131] [4096, 936] [4096, 759]
             else:
                 vlad_global = model.pool(image_encoding)
                 vlad_global_pca = get_pca_encoding(model, vlad_global)
@@ -168,7 +168,7 @@ def main():
         print("=> loaded checkpoint '{}'".format(resume_ckpt, ))
     else:
         raise FileNotFoundError("=> no checkpoint found at '{}'".format(resume_ckpt))
-
+    print('preparation is done!!!!!!!!!!!!!!!!!!')
     feature_extract(dataset, model, device, opt, config)
 
     torch.cuda.empty_cache()  # garbage clean GPU memory, a bug can occur when Pytorch doesn't automatically clear the

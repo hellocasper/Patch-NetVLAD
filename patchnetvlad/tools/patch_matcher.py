@@ -32,7 +32,7 @@ import cv2
 
 
 def torch_nn(x, y):
-    mul = torch.matmul(x, y)
+    mul = torch.matmul(x, y) # [num_local_of_this_scale, num_local_of_this_scale]
 
     dist = 2 - 2 * mul + 1e-9
     dist = torch.sqrt(dist)
@@ -63,31 +63,35 @@ class PatchMatcher(object):
         scores = []
         all_inlier_index_keypoints = []
         all_inlier_query_keypoints = []
+
         for qfeat, dbfeat, keypoints, stride in zip(qfeats, dbfeats, self.all_keypoints, self.strides):
-            fw_inds, bw_inds = torch_nn(qfeat, dbfeat)
+            # qfeat:[num_local_of_this_scale, dim_desc]
+            # dbfeat:[dim_desc, num_local_of_this_scale]
+            # keypoints:[2, num_local_of_this_scale] 
+            fw_inds, bw_inds = torch_nn(qfeat, dbfeat) # fw_inds, bw_inds are both of shape [num_local_of_this_scale, ]
 
             fw_inds = fw_inds.cpu().numpy()
             bw_inds = bw_inds.cpu().numpy()
 
-            mutuals = np.atleast_1d(np.argwhere(bw_inds[fw_inds] == np.arange(len(fw_inds))).squeeze())
+            mutuals = np.atleast_1d(np.argwhere(bw_inds[fw_inds] == np.arange(len(fw_inds))).squeeze()) # [num_multual_matchers,]
 
             if len(mutuals) > 3: # need at least four points to estimate a Homography
-                index_keypoints = keypoints[:, mutuals]
-                query_keypoints = keypoints[:, fw_inds[mutuals]]
+                index_keypoints = keypoints[:, mutuals] # [num_multual_matchers, 2]
+                query_keypoints = keypoints[:, fw_inds[mutuals]] # [num_multual_matchers, 2]
 
-                index_keypoints = np.transpose(index_keypoints)
-                query_keypoints = np.transpose(query_keypoints)
+                index_keypoints = np.transpose(index_keypoints) # [num_multual_matchers, 2]
+                query_keypoints = np.transpose(query_keypoints) # [num_multual_matchers, 2]
 
                 _, mask = cv2.findHomography(index_keypoints, query_keypoints, cv2.FM_RANSAC,
-                                             ransacReprojThreshold=16*stride*1.5)
+                                             ransacReprojThreshold=16*stride*1.5) # mask:[num_multual_matchers, 1] (bool)
                 # RANSAC reproj threshold is set to the (stride*1.5) in image space for vgg-16, given a particular patch stride
                 # in this work, we ignore the H matrix output - but users of this code are welcome to utilise this for
                 # pose estimation (something we may also investigate in future work)
 
-                inlier_index_keypoints = index_keypoints[mask.ravel() == 1]
+                inlier_index_keypoints = index_keypoints[mask.ravel() == 1] #[num_inliers,2]
                 all_inlier_query_keypoints.append(query_keypoints[mask.ravel() == 1])
-                inlier_count = inlier_index_keypoints.shape[0]
-                scores.append(-inlier_count / qfeat.shape[0])
+                inlier_count = inlier_index_keypoints.shape[0] #num_inliers
+                scores.append(-inlier_count / qfeat.shape[0]) 
                 all_inlier_index_keypoints.append(inlier_index_keypoints)
                 # we flip to negative such that best match is the smallest number, to be consistent with vanilla NetVlad
                 # we normalise by patch count to remove biases in the scoring between different patch sizes (so that all

@@ -101,12 +101,16 @@ def write_recalls_output(opt, recalls_netvlad, recalls_patchnetvlad, n_values):
 
 
 def feature_match(eval_set, device, opt, config):
-    input_query_local_features_prefix = join(opt.query_input_features_dir, 'patchfeats')
+    input_query_local_features_prefix = join(opt.query_input_features_dir, 'patchfeats') 
+    #'patchnetvlad/output_features/pitts30k_query/patchfeats'
     input_query_global_features_prefix = join(opt.query_input_features_dir, 'globalfeats.npy')
+    #'patchnetvlad/output_features/pitts30k_query/globalfeats.npy'
     input_index_local_features_prefix = join(opt.index_input_features_dir, 'patchfeats')
+    #'patchnetvlad/output_features/pitts30k_index/patchfeats'
     input_index_global_features_prefix = join(opt.index_input_features_dir, 'globalfeats.npy')
+    #'patchnetvlad/output_features/pitts30k_index/globalfeats.npy'
 
-    qFeat = np.load(input_query_global_features_prefix)
+    qFeat = np.load(input_query_global_features_prefix) #num_queries, dim_descriptor
     pool_size = qFeat.shape[1]
     dbFeat = np.load(input_index_global_features_prefix)
 
@@ -122,6 +126,7 @@ def feature_match(eval_set, device, opt, config):
     n_values = []
     for n_value in config['feature_match']['n_values_all'].split(","):  # remove all instances of n that are bigger than maxK
         n_values.append(int(n_value))
+    # [1, 5, 10, 20, 50, 100]
 
     if config['feature_match']['pred_input_path'] != 'None':
         predictions = np.load(config['feature_match']['pred_input_path'])  # optionally load predictions from a np file
@@ -141,6 +146,7 @@ def feature_match(eval_set, device, opt, config):
         else:
             # noinspection PyArgumentList
             _, predictions = faiss_index.search(qFeat, min(len(qFeat), max(n_values)))
+        # predictions is of shape num_queries,  min(len(qFeat), max(n_values))
 
     reranked_predictions = local_matcher(predictions, eval_set, input_query_local_features_prefix,
                                          input_index_local_features_prefix, config, device)
